@@ -349,7 +349,6 @@ function submitScore(name, score, total){
   payload.append('total', total);
   payload.append('percent', Math.round(score/total*100));
   payload.append('section', range);
-  payload.append('answers', JSON.stringify(userAnswers.map(function(a){return a===null?'':letters[a];})));
   payload.append('timestamp', new Date().toISOString());
 
   fetch(SUBMIT_URL, {
