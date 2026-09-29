@@ -142,6 +142,17 @@ header p{color:var(--muted); margin:8px 0 0; font-size:.95rem; position:relative
 .answer-note.wrong{color:var(--wrong); background:rgba(255,95,109,.08);}
 .answer-note.skip{color:var(--amber); background:rgba(255,204,102,.08);}
 
+.notice{
+  display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  background:rgba(40,224,197,.08); border:1px solid rgba(40,224,197,.35); color:var(--text);
+  border-radius:12px; padding:10px 14px; margin-bottom:12px; font-size:.88rem;
+}
+.notice button{
+  background:transparent; color:var(--accent); border:1px solid var(--accent); border-radius:8px;
+  padding:5px 12px; font-size:.82rem; font-weight:600; cursor:pointer;
+}
+.question-card.flash{border-color:var(--amber); box-shadow:0 0 0 2px rgba(255,204,102,.35);}
+
 footer{text-align:center; color:var(--muted); font-size:.8rem; padding:20px; opacity:.6;}
 
 .filter-row{display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:10px;}
@@ -171,16 +182,7 @@ footer{text-align:center; color:var(--muted); font-size:.8rem; padding:20px; opa
     <input type="text" id="studentName" placeholder="e.g. Juan Dela Cruz" autocomplete="off">
   </div>
 
-  <div class="filter-row">
-    <select id="rangeSelect">
-      <option value="0-150">All Questions (1-150)</option>
-      <option value="0-30">Earth Science I (1-30)</option>
-      <option value="30-60">Earth Science II (31-60)</option>
-      <option value="60-90">Astronomy I (61-90)</option>
-      <option value="90-120">Astronomy II (91-120)</option>
-      <option value="120-150">Physics (121-150)</option>
-    </select>
-  </div>
+  <div class="notice" id="resumeNotice"><span id="resumeText"></span><button type="button" id="startOverBtn">Start over</button></div>
 
   <div class="stat-row">
     <span id="answeredCount">0 / 150 answered</span>
@@ -217,11 +219,37 @@ const QUESTIONS = [["What mechanical and chemical processes cause even the harde
 
 const letters = ['A','B','C','D'];
 const container = document.getElementById('quizContainer');
-const rangeSelect = document.getElementById('rangeSelect');
 const nameInput = document.getElementById('studentName');
 let userAnswers = new Array(QUESTIONS.length).fill(null);
 let checked = false;
 let submitted = false;
+
+// ---------- Save progress (stored in this browser only) ----------
+const STORAGE_KEY = 'sciDrillProgress_A';
+function saveProgress(){
+  if(checked) return;
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      answers: userAnswers, name: nameInput.value, saved: Date.now()
+    }));
+  }catch(e){}
+}
+function clearProgress(){
+  try{ localStorage.removeItem(STORAGE_KEY); }catch(e){}
+}
+function loadProgress(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.answers) || d.answers.length !== QUESTIONS.length) return false;
+    const valid = d.answers.every(function(a){ return a === null || (Number.isInteger(a) && a >= 0 && a < 4); });
+    if(!valid) return false;
+    userAnswers = d.answers;
+    if(typeof d.name === 'string') nameInput.value = d.name;
+    return userAnswers.some(function(a){ return a !== null; });
+  }catch(e){ return false; }
+}
 
 function render(range){
   container.innerHTML = '';
@@ -243,6 +271,7 @@ function render(range){
       const opt = document.createElement('div');
       opt.className = 'option';
       opt.dataset.idx = idx;
+      if(userAnswers[i] === idx) opt.classList.add('selected');
       opt.innerHTML = '<div class="letter">'+letters[idx]+'</div><div>'+optText+'</div>';
       opt.addEventListener('click', function(){
         if(checked) return;
@@ -250,6 +279,7 @@ function render(range){
         Array.prototype.forEach.call(optsWrap.children, function(c){c.classList.remove('selected');});
         opt.classList.add('selected');
         updateStats();
+        saveProgress();
       });
       optsWrap.appendChild(opt);
     });
@@ -285,6 +315,29 @@ function checkAnswers(){
   }
   if(submitted){
     return; // prevent double submission
+  }
+
+  // Unanswered warning (counts only the questions currently shown)
+  const shown = getRange();
+  let firstUnanswered = -1, unanswered = 0;
+  for(let i = shown[0]; i < shown[1]; i++){
+    if(userAnswers[i] === null){
+      unanswered++;
+      if(firstUnanswered === -1) firstUnanswered = i;
+    }
+  }
+  if(unanswered > 0){
+    const msg = 'You have ' + unanswered + ' unanswered question' + (unanswered === 1 ? '' : 's') +
+                '. Unanswered items will be marked wrong.\n\nSubmit anyway?';
+    if(!confirm(msg)){
+      const target = document.getElementById('q' + firstUnanswered);
+      if(target){
+        target.scrollIntoView({behavior:'smooth', block:'center'});
+        target.classList.add('flash');
+        setTimeout(function(){ target.classList.remove('flash'); }, 2500);
+      }
+      return;
+    }
   }
 
   checked = true;
@@ -332,7 +385,6 @@ function checkAnswers(){
 
 function submitScore(name, score, total){
   const statusEl = document.getElementById('submitStatus');
-  const range = rangeSelect.value;
 
   if(!SUBMIT_URL){
     statusEl.className = 'err';
@@ -348,7 +400,7 @@ function submitScore(name, score, total){
   payload.append('score', score);
   payload.append('total', total);
   payload.append('percent', Math.round(score/total*100));
-  payload.append('section', range);
+  payload.append('section', '0-150');
   payload.append('timestamp', new Date().toISOString());
 
   fetch(SUBMIT_URL, {
@@ -360,6 +412,7 @@ function submitScore(name, score, total){
     // no-cors gives an opaque response, so we can't confirm success from the response itself,
     // but a network-level failure will still throw and land in .catch()
     submitted = true;
+    clearProgress();
     statusEl.className = 'ok';
     statusEl.textContent = 'Submitted! Your teacher can now see your result.';
   }).catch(function(err){
@@ -384,6 +437,11 @@ function revealAll(){
 }
 
 function resetDrill(){
+  if(!checked && userAnswers.some(function(a){ return a !== null; })){
+    if(!confirm('Reset the drill? Your saved answers will be erased.')) return;
+  }
+  clearProgress();
+  document.getElementById('resumeNotice').style.display = 'none';
   checked = false;
   submitted = false;
   userAnswers = new Array(QUESTIONS.length).fill(null);
@@ -394,19 +452,21 @@ function resetDrill(){
 }
 
 function getRange(){
-  return rangeSelect.value.split('-').map(Number);
+  return [0, QUESTIONS.length];
 }
 
 document.getElementById('checkBtn').addEventListener('click', checkAnswers);
 document.getElementById('revealBtn').addEventListener('click', revealAll);
 document.getElementById('resetBtn').addEventListener('click', resetDrill);
 document.getElementById('topBtn').addEventListener('click', function(){window.scrollTo({top:0,behavior:'smooth'});});
-rangeSelect.addEventListener('change', function(){
-  checked = false;
-  document.getElementById('score-banner').style.display = 'none';
-  render(getRange());
-});
+nameInput.addEventListener('input', saveProgress);
+document.getElementById('startOverBtn').addEventListener('click', resetDrill);
 
+if(loadProgress()){
+  const n = userAnswers.filter(function(a){ return a !== null; }).length;
+  document.getElementById('resumeText').textContent = 'Welcome back! Your saved progress was restored (' + n + ' answered).';
+  document.getElementById('resumeNotice').style.display = 'flex';
+}
 render(getRange());
 </script>
 </body>
