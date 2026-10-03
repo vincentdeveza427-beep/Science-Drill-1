@@ -35,7 +35,18 @@
   .modal .err{color:#dc2626;font-size:13px;min-height:18px;margin-top:6px}
   .btn{flex:1;padding:10px;border-radius:10px;border:1px solid #e2e8f0;background:#fff;font-weight:700;cursor:pointer}
   .btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
-  @media(max-width:700px){.grid{grid-template-columns:1fr}h1{font-size:30px}}
+  .hidden{display:none !important}
+  .mode-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  .mode-card{display:flex;flex-direction:column;gap:10px;text-align:left;font:inherit;color:inherit;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:26px;cursor:pointer;transition:.18s}
+  .mode-card:hover{transform:translateY(-3px);border-color:#93c5fd;box-shadow:0 10px 30px rgba(15,23,42,.08)}
+  .mode-icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;font-size:24px;background:#eff6ff}
+  .mode-card h2{font-size:22px}
+  .mode-card p{color:#64748b;font-size:14px;line-height:1.55}
+  .mode-card ul{color:#64748b;font-size:13px;line-height:1.7;padding-left:18px}
+  .stepbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+  .link-btn{background:none;border:0;color:#2563eb;font-weight:700;font-size:14px;cursor:pointer}
+  .mode-pill{font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+  @media(max-width:700px){.grid,.mode-grid{grid-template-columns:1fr}h1{font-size:30px}}
 </style>
 </head>
 <body>
@@ -48,9 +59,39 @@
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8"><circle cx="12" cy="12" r="2" fill="white" stroke="white"/><ellipse cx="12" cy="12" rx="9" ry="3.6"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="9" ry="3.6" transform="rotate(120 12 12)"/></svg>
   </div>
   <h1>Science <span>Drills</span></h1>
-  <p>Choose a drill set to begin</p>
+  <p id="headSub">Choose how you want to practice</p>
 </header>
-<div class="wrap">
+<div class="wrap" id="modeStep">
+  <div class="mode-grid">
+    <button class="mode-card" id="modeTimed" type="button">
+      <div class="mode-icon">&#9201;</div>
+      <h2>Timed Mode</h2>
+      <p>Take a drill like an exam.</p>
+      <ul>
+        <li>3 hours on the clock once you open a drill</li>
+        <li>Answers are submitted automatically when time runs out</li>
+        <li>No more answering after that</li>
+      </ul>
+      <div class="start">Choose Timed Mode &rarr;</div>
+    </button>
+    <button class="mode-card" id="modeFlash" type="button">
+      <div class="mode-icon">&#128196;</div>
+      <h2>Flashcard Mode</h2>
+      <p>Study at your own pace.</p>
+      <ul>
+        <li>One question at a time, tap to reveal the answer</li>
+        <li>Mark cards as "Got it" or "Still learning"</li>
+        <li>No timer and no score is recorded</li>
+      </ul>
+      <div class="start">Choose Flashcard Mode &rarr;</div>
+    </button>
+  </div>
+</div>
+<div class="wrap hidden" id="setStep">
+  <div class="stepbar">
+    <button class="link-btn" id="changeMode" type="button">&larr; Change mode</button>
+    <span class="mode-pill" id="modePill"></span>
+  </div>
   <div class="grid" id="setGrid"></div>
 </div>
 <footer>Science Drill Reviewer</footer>
@@ -79,14 +120,52 @@ const SETS = [
   { title: "Set F", badge: "150 questions", description: "Physics and Chemistry", href: "science-drill-6.html" },
 ];
 const grid = document.getElementById('setGrid');
-SETS.forEach(function(s){
-  const available = !!s.href;
-  const card = document.createElement(available ? 'a' : 'div');
-  card.className = 'set-card';
-  if(available) card.href = s.href;
-  card.innerHTML = '<span class="badge">'+s.badge+'</span><h2>'+s.title+'</h2><p>'+s.description+'</p>' + (available ? '<div class="start">Start drill →</div>' : '<div class="start">Coming soon</div>');
-  grid.appendChild(card);
-});
+const modeStep = document.getElementById('modeStep');
+const setStep = document.getElementById('setStep');
+const headSub = document.getElementById('headSub');
+const modePill = document.getElementById('modePill');
+const MODES = {
+  timed: { page: 'timed.html', pill: 'Timed Mode - 3 hours', badgeExtra: ' \u00b7 3 hours', cta: 'Start timed drill \u2192' },
+  flashcards: { page: 'flashcards.html', pill: 'Flashcard Mode', badgeExtra: '', cta: 'Study flashcards \u2192' }
+};
+function renderSets(mode){
+  const m = MODES[mode];
+  grid.innerHTML = '';
+  SETS.forEach(function(s){
+    const available = !!s.href;
+    const card = document.createElement(available ? 'a' : 'div');
+    card.className = 'set-card';
+    if(available) card.href = m.page + '?set=' + encodeURIComponent(s.href);
+    card.innerHTML = '<span class="badge">'+s.badge+(available ? m.badgeExtra : '')+'</span><h2>'+s.title+'</h2><p>'+s.description+'</p>' + (available ? '<div class="start">'+m.cta+'</div>' : '<div class="start">Coming soon</div>');
+    grid.appendChild(card);
+  });
+  modePill.textContent = m.pill;
+}
+function showModes(){
+  setStep.classList.add('hidden');
+  modeStep.classList.remove('hidden');
+  headSub.textContent = 'Choose how you want to practice';
+}
+function showSets(mode){
+  renderSets(mode);
+  modeStep.classList.add('hidden');
+  setStep.classList.remove('hidden');
+  headSub.textContent = 'Choose a drill set to begin';
+}
+function chooseMode(mode){
+  showSets(mode);
+  history.pushState(null, '', '#' + mode);
+}
+document.getElementById('modeTimed').onclick = function(){ chooseMode('timed'); };
+document.getElementById('modeFlash').onclick = function(){ chooseMode('flashcards'); };
+document.getElementById('changeMode').onclick = function(){ history.pushState(null, '', location.pathname + location.search); showModes(); };
+function syncFromHash(){
+  const h = location.hash.replace('#','');
+  if(MODES[h]) showSets(h); else showModes();
+}
+window.addEventListener('hashchange', syncFromHash);
+window.addEventListener('popstate', syncFromHash);
+syncFromHash();
 
 // --- Auth (talks to backend in server.js) ---
 let mode = 'signup';
